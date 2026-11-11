@@ -1,0 +1,577 @@
+{
+  "info": {
+    "_postman_id": "d16f1c74-3b75-4db8-9b40-2b19f0cce211",
+    "name": "Sekolah Karir - Applicant Management API",
+    "description": "Postman regression suite for the required assignment scope (create, list, update stage, validation) and modest supporting features (detail, search, filters, pagination, summary). Run requests in order. Create stores the generated applicant ID and email for dependent tests.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "applicantId",
+      "value": ""
+    },
+    {
+      "key": "applicantEmail",
+      "value": ""
+    },
+    {
+      "key": "uniqueEmail",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Health check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/health"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('status is ok', () => pm.expect(pm.response.json().status).to.eql('ok'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 - Create applicant",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Firlydani Demo Applicant\",\n  \"email\": \"{{uniqueEmail}}\",\n  \"position\": \"Backend Engineer\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.collectionVariables.set('uniqueEmail', 'firlydani.' + Date.now() + '@example.com');"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 201 Created', () => pm.response.to.have.status(201));",
+              "const body = pm.response.json();",
+              "pm.test('success envelope', () => pm.expect(body.success).to.eql(true));",
+              "pm.test('default stage is APPLIED', () => pm.expect(body.data.stage).to.eql('APPLIED'));",
+              "pm.test('response contains applicant fields', () => { ['id','name','email','position','stage','created_at','updated_at'].forEach(k => pm.expect(body.data).to.have.property(k)); });",
+              "pm.collectionVariables.set('applicantId', body.data.id);",
+              "pm.collectionVariables.set('applicantEmail', body.data.email);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 - Get applicant by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants/{{applicantId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "pm.test('returns the created applicant', () => pm.expect(data.id).to.eql(Number(pm.collectionVariables.get('applicantId'))));",
+              "pm.test('email matches', () => pm.expect(data.email).to.eql(pm.collectionVariables.get('applicantEmail')));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 - List applicants (default pagination)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('data is an array', () => pm.expect(body.data).to.be.an('array'));",
+              "pm.test('pagination metadata exists', () => pm.expect(body.meta).to.have.all.keys('page','limit','total','total_pages'));",
+              "pm.test('defaults page=1 and limit=10', () => { pm.expect(body.meta.page).to.eql(1); pm.expect(body.meta.limit).to.eql(10); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 - Search applicant by name/email/position",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?search=Firlydani%20Demo"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('search result contains created applicant', () => pm.expect(pm.response.json().data.some(x => x.id === Number(pm.collectionVariables.get('applicantId')))).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 - Filter by stage APPLIED",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?stage=APPLIED&page=1&limit=5"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('all results have APPLIED stage', () => pm.expect(pm.response.json().data.every(x => x.stage === 'APPLIED')).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 - Filter by position",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?position=Backend"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('all results match position', () => pm.expect(pm.response.json().data.every(x => x.position.toLowerCase().includes('backend'))).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 - Pagination limit 2",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?page=1&limit=2"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const body = pm.response.json();",
+              "pm.test('maximum two records returned', () => pm.expect(body.data.length).to.be.at.most(2));",
+              "pm.test('meta limit is 2', () => pm.expect(body.meta.limit).to.eql(2));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 - Update applicant stage to INTERVIEW",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants/{{applicantId}}/stage",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stage\": \"INTERVIEW\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('stage updated to INTERVIEW', () => pm.expect(pm.response.json().data.stage).to.eql('INTERVIEW'));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 - Verify stage filter after update",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?stage=INTERVIEW&search=Firlydani"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "pm.test('updated applicant appears in INTERVIEW filter', () => pm.expect(pm.response.json().data.some(x => x.id === Number(pm.collectionVariables.get('applicantId')))).to.eql(true));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 - Summary by stage",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants/summary"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const data = pm.response.json().data;",
+              "pm.test('summary contains total and stage breakdown', () => { pm.expect(data.total).to.be.a('number'); pm.expect(data.by_stage).to.be.an('array'); });",
+              "pm.test('summary total is non-negative', () => pm.expect(data.total).to.be.at.least(0));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 - Validation: missing name",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"missing.name@example.com\",\n  \"position\": \"Backend Engineer\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));",
+              "pm.test('success is false', () => pm.expect(pm.response.json().success).to.eql(false));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 - Validation: missing email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Missing Email\",\n  \"position\": \"Backend Engineer\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 - Validation: missing position",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Missing Position\",\n  \"email\": \"missing.position@example.com\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 - Validation: invalid email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Invalid Email\",\n  \"email\": \"not-an-email\",\n  \"position\": \"Backend Engineer\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 - Conflict: duplicate email",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Duplicate Applicant\",\n  \"email\": \"{{applicantEmail}}\",\n  \"position\": \"Backend Engineer\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409 Conflict', () => pm.response.to.have.status(409));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 - Validation: invalid stage update",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants/{{applicantId}}/stage",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stage\": \"PROMOTED\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 - Validation: invalid stage filter",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?stage=NOT_A_STAGE"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 - Validation: limit above maximum",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?page=1&limit=101"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 - Validation: invalid page value",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants?page=zero"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 - Not found: unknown applicant",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants/99999999"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 404 Not Found', () => pm.response.to.have.status(404));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 - Validation: malformed applicant ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/v1/applicants/abc"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 - Validation: zero applicant ID on stage update",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{baseUrl}}/api/v1/applicants/0/stage",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"stage\": \"INTERVIEW\"\n}"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 400 Bad Request', () => pm.response.to.have.status(400));"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
